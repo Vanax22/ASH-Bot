@@ -28,6 +28,7 @@ jobs:
         run: python news_bot.py
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_TEXT: ${{ secrets.DISCORD_WEBHOOK_TEXT }}
 
       - name: 확인한 글 기록 저장
         run: |
