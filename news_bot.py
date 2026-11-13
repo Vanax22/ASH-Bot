@@ -68,6 +68,8 @@ def main():
     first_run = not os.path.exists(SEEN_FILE)
     seen = load_seen()
     links = get_article_links()
+    new = [u for u in links if u not in seen]
+    print(f"사이트에서 찾은 글 {len(links)}개 / 기록된 글 {len(seen)}개 / 새 글 {len(new)}개 / 첫 실행: {first_run}")
     if not links:
         print("글 링크를 찾지 못했습니다. 사이트 구조가 바뀌었을 수 있어요.")
         sys.exit(1)
@@ -78,8 +80,11 @@ def main():
         if first_run:
             seen.add(url)  # 첫 실행: 기존 글은 기록만 함
         elif send(url):
+            print("전송 성공:", url)
             seen.add(url)
             time.sleep(1.5)
+        else:
+            print("전송 실패로 건너뜀:", url)
     save_seen(seen)
 
 main()
