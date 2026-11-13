@@ -1,7 +1,8 @@
 import requests, json, os, time, sys
 from bs4 import BeautifulSoup
 
-WEBHOOK_URL = os.environ["DISCORD_WEBHOOK"]
+FORUM_WEBHOOK = os.environ.get("DISCORD_WEBHOOK", "")        # 포럼 채널용
+TEXT_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_TEXT", "")    # 텍스트 채널용
 LIST_URL = "https://wowf.io/ko/news"
 SEEN_FILE = "seen.json"
 HEADERS = {"User-Agent": "Mozilla/5.0 (news-to-discord bot)"}
@@ -40,6 +41,17 @@ def get_meta(url):
         "image": og("og:image"),
     }
 
+def post(webhook, payload, label):
+    for _ in range(3):
+        r = requests.post(webhook, json=payload, timeout=15)
+        if r.status_code == 429:  # 속도 제한이면 잠깐 기다렸다 재시도
+            time.sleep(r.json().get("retry_after", 2))
+            continue
+        if r.status_code >= 300:
+            print(f"[{label}] 전송 실패:", r.status_code, r.text)
+        return r.status_code < 300
+    return False
+
 def send(url):
     m = get_meta(url)
     embed = {
@@ -50,19 +62,18 @@ def send(url):
     }
     if m["image"]:
         embed["image"] = {"url": m["image"]}
-    payload = {
-        "thread_name": m["title"][:100],  # 포럼 게시글 제목
-        "embeds": [embed],
-    }
-    for _ in range(3):
-        r = requests.post(WEBHOOK_URL, json=payload, timeout=15)
-        if r.status_code == 429:  # 속도 제한이면 잠깐 기다렸다 재시도
-            time.sleep(r.json().get("retry_after", 2))
-            continue
-        if r.status_code >= 300:
-            print("전송 실패:", r.status_code, r.text)
-        return r.status_code < 300
-    return False
+
+    ok = False
+    if FORUM_WEBHOOK:
+        forum_payload = {"thread_name": m["title"][:100], "embeds": [embed]}
+        if post(FORUM_WEBHOOK, forum_payload, "포럼"):
+            print("[포럼] 전송 성공:", url)
+            ok = True
+    if TEXT_WEBHOOK:
+        if post(TEXT_WEBHOOK, {"embeds": [embed]}, "텍스트"):
+            print("[텍스트] 전송 성공:", url)
+            ok = True
+    return ok  # 한 곳이라도 성공하면 '보낸 글'로 기록
 
 def main():
     first_run = not os.path.exists(SEEN_FILE)
@@ -80,7 +91,6 @@ def main():
         if first_run:
             seen.add(url)  # 첫 실행: 기존 글은 기록만 함
         elif send(url):
-            print("전송 성공:", url)
             seen.add(url)
             time.sleep(1.5)
         else:
